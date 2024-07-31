@@ -329,17 +329,26 @@ func ListAllServers(exporter *BaseOpenStackExporter, ch chan<- prometheus.Metric
 	// Server status metrics
 	if !exporter.MetricIsDisabled("server_status") {
 		for _, server := range allServers {
+			var labelsValue []string
+			var labels []string
 			if len(allFlavors) == 0 {
-				ch <- prometheus.MustNewConstMetric(exporter.Metrics["server_status"].Metric,
-					prometheus.GaugeValue, float64(mapServerStatus(server.Status)), server.ID, server.Status, server.Name, server.TenantID,
+				labelsValue = append(labelsValue,  server.ID, server.Status, server.Name, server.TenantID,
 					server.UserID, server.AccessIPv4, server.AccessIPv6, server.HostID, server.HypervisorHostname, server.ID,
 					server.AvailabilityZone, fmt.Sprintf("%v", server.Flavor["id"]), server.InstanceName)
 			} else {
-				ch <- prometheus.MustNewConstMetric(exporter.Metrics["server_status"].Metric,
-					prometheus.GaugeValue, float64(mapServerStatus(server.Status)), server.ID, server.Status, server.Name, server.TenantID,
+				labelsValue = append(labelsValue,  server.ID, server.Status, server.Name, server.TenantID,
 					server.UserID, server.AccessIPv4, server.AccessIPv6, server.HostID, server.HypervisorHostname, server.ID,
 					server.AvailabilityZone, searchFlavorIDbyName(server.Flavor["original_name"], allFlavors), server.InstanceName)
 			}
+			if len(server.Metadata) > 0 {
+				for key, value := range server.Metadata{
+					sanitizedKey := SanitizeLabelName(key)
+					labels = append(labels, sanitizedKey)
+					labelsValue = append(labelsValue, value)
+				}
+			}
+			exporter.UpdateMetric("server_status", labels, nil)
+			ch  <- prometheus.MustNewConstMetric(exporter.Metrics["server_status"].Metric,prometheus.GaugeValue, float64(mapServerStatus(server.Status)), labelsValue...)
 		}
 	}
 	return nil
